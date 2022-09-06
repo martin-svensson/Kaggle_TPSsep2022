@@ -1,0 +1,163 @@
+---
+title: "EDA"
+format: html
+editor: visual
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+# knitr::opts_chunk$set(
+#   echo = FALSE,
+#   out.width = "100%",
+#   out.height = "60%",
+#   fig.align = "center"
+# )
+
+library(data.table)
+library(tidyverse)
+library(tidyquant)
+library(magrittr)
+theme_set(theme_bw())
+
+load("../Output/1_split_row_id.RData")
+load("../Output/1_data.RData")
+
+train_data <- data[!(row_id %in% split_row_id[["test"]])]
+```
+
+This document is an EDA of the data. This document creates no output; changes to data will be made in separate scripts.
+
+Let's initially create some time variables to be able to analyse seasonality within year, month and week.
+
+```{r}
+train_data[
+  ,
+  `:=`(year = as.factor(year(date)), month = as.factor(month(date)), day = as.factor(day(date)), weekday = as.factor(weekdays(date)))
+]
+```
+
+## Variation
+
+Questions
+
+-   What is the range of values and does it match expectations?
+
+-   Are there missing or odd values that we need to impute (or delete faulty records / variables)?
+
+-   Which values are the most common and why?
+
+-   Which values are rare (outliers) and why? Are there perhaps faulty records?
+
+-   Are there any unusual patterns that don't match expectations (multimodel distribution / clusters for example)
+
+```{r}
+summary(train_data)
+```
+
+No missing values. Only categorical predictors and no numeric. Label takes reasonable values, although heavy tailed. Number of observations of each category is uniform, suggesting one record pr. day pr. sub group without any missing days or duplicates - let's quickly confirm this.
+
+```{r}
+# correct number of days
+nrow(train_data[ , .N, by = date]) == (nrow(train_data) / (6 * 2 * 4))
+
+# consistent number of obs pr day
+train_data[ , .N, by = date]$N %>% unique
+```
+
+**By year**
+
+```{r}
+train_data %>%
+  ggplot(aes(x = date, y = num_sold)) +
+  geom_ma(ma_fun = SMA, n = 31) 
+```
+
+```{r}
+train_data[
+  , 
+  .(num_sold = sum(num_sold)),
+  by = year
+]
+```
+
+There is definitely seasonality, especially around Christmas, and probably within each month / week as well. Some variation from year to year - that is going to be hard to model, unless one of the predictors embodies this relation.
+
+```{r}
+train_data %>%
+  ggplot(aes(x = date, y = num_sold)) +
+  geom_ma(ma_fun = SMA, n = 31) +
+  facet_wrap(~ country)
+
+train_data %>%
+  ggplot(aes(x = date, y = num_sold)) +
+  geom_ma(ma_fun = SMA, n = 31) +
+  facet_wrap(~ store)
+
+train_data %>%
+  ggplot(aes(x = date, y = num_sold)) +
+  geom_ma(ma_fun = SMA, n = 31) +
+  facet_wrap(~ product)
+
+```
+
+Each country exhibits the same pattern, which is to be expected since they are all European countries, but there are large differences in the volume of books sold.
+
+The same goes for store.
+
+The product though has a lot of seasonality, conveniently asynchronous. Kaggle for Kids evidently explains the overall larger volume, which means that we fortunately do not have to include a time-variable accounting for trends which are not accounted for by other predictors.
+
+We thus include main effects of country and store and an interaction effect of product with yearly seasonality (we might use week or day of the year with splines or similar).
+
+### By month
+
+```{r}
+train_data %>%
+  group_by(day, month) %>%
+  summarize(
+    num_sold = sum(num_sold)
+  ) %>%
+  ggplot() + 
+  geom_point(aes(x = day, y = num_sold)) + 
+  facet_wrap(~ month)
+```
+
+Christmas and January are of course extraordinary. There seems to be a strong weekly pattern (weekend vs. workdays). Other than that, there does not seem to a be a large difference in volume between the months.
+
+### By week
+
+```{r}
+train_data %>%
+  group_by(
+    weekday
+  ) %>%
+  summarize(
+    num_sold = sum(num_sold)
+  ) %>%
+  ggplot() + 
+  geom_point(aes(x = weekday, y = num_sold))
+```
+
+## Covariation
+
+```{r}
+train_data %>%
+  ggplot(aes(x = date, y = num_sold)) +
+  geom_ma(ma_fun = SMA, n = 31) +
+  facet_wrap(~ product + store)
+```
+
+Interaction effects between product, store and country does not seem to be necessary - the effect of product does not change from country to county or from store to store (the other plot are not included here in order not to overcrowd the analysis).
+
+## TL;DR: Conclusions
+
+Summary of key findings to be implemented and taken into account in the further modeling:
+
+-   Main effects of store and country should be included
+
+-   There is strong seasonality for product, so we might include interaction between day or week of year and product and use a non-linear model.
+
+-   A weekend indicator is a useful variable.
+
+-   A variable indicating Christmas and first week of January is useful.
