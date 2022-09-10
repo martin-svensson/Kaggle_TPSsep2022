@@ -19,10 +19,13 @@ library(data.table)
 library(tidyverse)
 library(tidyquant)
 library(magrittr)
+library(splines)
+library(forecast)
 theme_set(theme_bw())
 
 load("../Output/1_split_row_id.RData")
 load("../Output/1_data.RData")
+lockdown_data <- fread("../Data/stay-at-home-covid.csv")
 
 train_data <- data[!(row_id %in% split_row_id[["test"]])]
 ```
@@ -34,11 +37,9 @@ Let's initially create some time variables to be able to analyse seasonality wit
 ```{r}
 train_data[
   ,
-  `:=`(year = as.factor(year(date)), month = as.factor(month(date)), day = as.factor(day(date)), weekday = as.factor(weekdays(date)))
+  `:=`(year = as.factor(year(date)), month = as.factor(month(date)), day_of_year = yday(date), day_of_month = day(date), weekday = as.factor(weekdays(date)))
 ]
 ```
-
-## Variation
 
 Questions
 
@@ -50,7 +51,7 @@ Questions
 
 -   Which values are rare (outliers) and why? Are there perhaps faulty records?
 
--   Are there any unusual patterns that don't match expectations (multimodel distribution / clusters for example)
+-   Are there any unusual patterns that don't match expectations
 
 ```{r}
 summary(train_data)
@@ -66,98 +67,333 @@ nrow(train_data[ , .N, by = date]) == (nrow(train_data) / (6 * 2 * 4))
 train_data[ , .N, by = date]$N %>% unique
 ```
 
-**By year**
+Note that we have 6 \* 2 \* 4 univariate time series.
+
+## Visualizing Time Series
+
+We will start out by visualizing each of time series:
+
+### KaggleMart
+
+```{r}
+#| fig-height: 10
+#| fig-width: 10
+
+train_data[store == "KaggleMart"] %>%
+  ggplot(aes(x = date, y = num_sold, color= product)) +
+  #geom_line() +
+  geom_ma(ma_fun = SMA, n = 3) +
+  facet_wrap(~ country, ncol = 2) + 
+  #facet_grid(rows = vars(country)) + 
+  theme(legend.position = "bottom")
+```
+
+### KaggleRama
+
+```{r}
+#| fig-height: 10
+#| fig-width: 10
+
+train_data[store == "KaggleRama"] %>%
+  ggplot(aes(x = date, y = num_sold, color= product)) +
+  #geom_line() +
+  geom_ma(ma_fun = SMA, n = 3) +
+  facet_wrap(~ country, ncol = 2) + 
+  #facet_grid(rows = vars(country)) + 
+  theme(legend.position = "bottom")
+```
+
+Each product exhibits strong seasonality, although it is a different pattern from product to product. The seasonality pattern seems to be consistent from country to country as well as from store to store, so there is evidently no interaction. The effect of country and store seems to mostly be a matter of volume sold (ie. a translation along the y-axis), and not so much a change in seasonality (perhaps it is kind of odd that the type of seasonality observed does not differ from country to country). There are significant spikes around the holidays.
+
+### Country
+
+Investigating differences in aggregate sales across countries
 
 ```{r}
 train_data %>%
-  ggplot(aes(x = date, y = num_sold)) +
-  geom_ma(ma_fun = SMA, n = 31) 
+  group_by(
+    date, 
+    country
+  ) %>%
+  summarize(
+    num_sold= sum(num_sold)
+  ) %>% 
+  ggplot(aes(x = date, y = num_sold, color = country)) +
+  geom_ma(ma_fun = SMA, n = 3)
+```
+
+As suspected, the only difference seems to be a translation in the volume sold. Let's visually confirm this by looking at the ratios over time: if they are consistent over time, the effect of country is constant and independent of time.
+
+```{r}
+train_data %>%
+  group_by(
+    date, country
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  ) %>%
+  group_by(
+    date
+  ) %>%
+  mutate(
+    num_sold_d = sum(num_sold),
+    ratio = num_sold / num_sold_d
+  ) %>%
+  ggplot(aes(x = date, y = ratio, color = country)) +
+  geom_line()
+```
+
+### Store
+
+```{r}
+train_data %>%
+  group_by(date, store) %>%
+  summarise(
+    num_sold= sum(num_sold)
+  ) %>% 
+  ggplot(aes(x = date, y = num_sold, color = store)) +
+  geom_ma(ma_fun = SMA, n = 3)
 ```
 
 ```{r}
-train_data[
-  , 
-  .(num_sold = sum(num_sold)),
-  by = year
-]
+train_data %>%
+  group_by(
+    date, store
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  ) %>%
+  group_by(
+    date
+  ) %>%
+  mutate(
+    num_sold_d = sum(num_sold),
+    ratio = num_sold / num_sold_d
+  ) %>%
+  ggplot(aes(x = date, y = ratio, color = store)) +
+  geom_line()
 ```
 
-There is definitely seasonality, especially around Christmas, and probably within each month / week as well. Some variation from year to year - that is going to be hard to model, unless one of the predictors embodies this relation.
+Same for store.
+
+### Product
 
 ```{r}
 train_data %>%
-  ggplot(aes(x = date, y = num_sold)) +
-  geom_ma(ma_fun = SMA, n = 31) +
-  facet_wrap(~ country)
-
-train_data %>%
-  ggplot(aes(x = date, y = num_sold)) +
-  geom_ma(ma_fun = SMA, n = 31) +
-  facet_wrap(~ store)
-
-train_data %>%
-  ggplot(aes(x = date, y = num_sold)) +
-  geom_ma(ma_fun = SMA, n = 31) +
-  facet_wrap(~ product)
-
+  group_by(date, product) %>%
+  summarise(
+    num_sold= sum(num_sold)
+  ) %>% 
+  ggplot(aes(x = date, y = num_sold, color = product)) +
+  geom_ma(ma_fun = SMA, n = 3) + 
+  theme(legend.position = "bottom")
 ```
 
-Each country exhibits the same pattern, which is to be expected since they are all European countries, but there are large differences in the volume of books sold.
+Except for Kaggle for Kids, each product has a strong yearly seasonality.
 
-The same goes for store.
+```{r}
+train_data %>%
+  group_by(
+    date, product
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  ) %>%
+  group_by(
+    date
+  ) %>%
+  mutate(
+    num_sold_d = sum(num_sold),
+    ratio = num_sold / num_sold_d
+  ) %>%
+  ggplot(aes(x = date, y = ratio, color = product)) +
+  geom_line() +
+  theme(legend.position = "bottom")
+```
 
-The product though has a lot of seasonality, conveniently asynchronous. Kaggle for Kids evidently explains the overall larger volume, which means that we fortunately do not have to include a time-variable accounting for trends which are not accounted for by other predictors.
+The ratio of sales by product exhibits even stronger seasons.
 
-We thus include main effects of country and store and an interaction effect of product with yearly seasonality (we might use week or day of the year with splines or similar).
+## Seasonality
+
+Note that seasonality are consistent patterns over a specific interval (year, month, week). Cyclical behavior are regular patterns that do not occur according to specific intervals.
+
+### By year
+
+See previous section.
 
 ### By month
 
+Note that inverse trends in the sub groups may cancel each other out, meaning that we would not be able to spot any patterns when looking at aggregate data, even though there are patterns when we look at individual ts.
+
 ```{r}
 train_data %>%
-  group_by(day, month) %>%
-  summarize(
+  group_by(day_of_month, month, product) %>%
+  summarise(
     num_sold = sum(num_sold)
   ) %>%
   ggplot() + 
-  geom_point(aes(x = day, y = num_sold)) + 
-  facet_wrap(~ month)
+  geom_point(aes(x = day_of_month, y = num_sold, color = product)) + 
+  facet_wrap(~ month) + 
+  theme(legend.position = "bottom")
 ```
 
-Christmas and January are of course extraordinary. There seems to be a strong weekly pattern (weekend vs. workdays). Other than that, there does not seem to a be a large difference in volume between the months.
+There does not seem to be monthly seasonality, eg. sales do not seem to increase just after payday.
 
 ### By week
 
 ```{r}
 train_data %>%
   group_by(
-    weekday
+    weekday, product
   ) %>%
   summarize(
     num_sold = sum(num_sold)
   ) %>%
   ggplot() + 
-  geom_point(aes(x = weekday, y = num_sold))
+  geom_point(aes(x = weekday, y = num_sold, color = product)) +
+  theme(legend.position = "bottom")
 ```
 
-## Covariation
+There is strong weekly seasonality, especially between weekends and workdays.
+
+## Trends
+
+In order assess whether any trends are present, we will de-seasonalize the time series aggregated by product. (below does not work since the seasonal component is apparently not strong enough ...)
 
 ```{r}
-train_data %>%
-  ggplot(aes(x = date, y = num_sold)) +
-  geom_ma(ma_fun = SMA, n = 31) +
-  facet_wrap(~ product + store)
+# decomp <- 
+#   train_data %>%
+#   group_by(
+#     date, 
+#     product
+#   ) %>%
+#   summarise(
+#     num_sold = sum(num_sold)
+#   ) %>%
+#   pivot_wider(
+#     values_from = num_sold, 
+#     names_from = "product"
+#   ) %>%
+#   ungroup() %>%
+#   select(-date) %>%
+#   map(
+#     ~ seasadj(stl(.x))
+#   )
+
 ```
 
-Interaction effects between product, store and country does not seem to be necessary - the effect of product does not change from country to county or from store to store (the other plot are not included here in order not to overcrowd the analysis).
+## COVID
+
+Even though the test data should usually be excluded from EDA, we need to check the effect of COVID lockdowns in each of the countries for two reasons
+
+-   We need to remove the effect of lockdowns in order for 2020 to be useful test data.
+
+-   We need to include a variable accounting for lockdowns when predicting on the full data.
+
+```{r}
+data %>%
+  group_by(
+    date
+  ) %>%
+  summarize(
+    num_sold= sum(num_sold)
+  ) %>% 
+  ggplot(aes(x = date, y = num_sold)) +
+  geom_ma(ma_fun = SMA, n = 3)
+```
+
+The total volume sold during 2020 is much larger. There is a significant drop during spring, probably because of lockdowns.
+
+```{r}
+data %>%
+  group_by(
+    date, 
+    country
+  ) %>%
+  summarize(
+    num_sold= sum(num_sold)
+  ) %>% 
+  ggplot(aes(x = date, y = num_sold, color = country)) +
+  geom_ma(ma_fun = SMA, n = 3)
+```
+
+The difference between countries is completely erased. The sales has increased dramatically for some counties (Poland), while staying unchanged for others. The effect of lockdown seems to be consistent across countries.
+
+```{r}
+data %>%
+  group_by(
+    date, 
+    store
+  ) %>%
+  summarize(
+    num_sold= sum(num_sold)
+  ) %>% 
+  ggplot(aes(x = date, y = num_sold, color = store)) +
+  geom_ma(ma_fun = SMA, n = 3)
+```
+
+The effect of store is still constant.
+
+```{r}
+data %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarize(
+    num_sold= sum(num_sold)
+  ) %>% 
+  ggplot(aes(x = date, y = num_sold, color = product)) +
+  geom_ma(ma_fun = SMA, n = 3) + 
+  theme(legend.position = "bottom")
+```
+
+The sales volume never really comes back down from the holiday spike. However, there is a decrease when lock downs set in during spring, compared to what would have been the case if the seasonal patterns were as usual.
+
+```{r}
+data[year(date) == 2020] %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarize(
+    num_sold= sum(num_sold)
+  ) %>% 
+  ggplot(aes(x = date, y = num_sold, color = product)) +
+  geom_line() + 
+  theme(legend.position = "bottom")
+```
+
+### Lockdown data
+
+```{r}
+lockdown_data[year(date) == 2020] %>%
+  ggplot(aes(x = date, y = policy)) + 
+  geom_point() + 
+  facet_wrap(~ country)
+```
+
+The policies in place differ greatly from country to country, which does not really reflect the pattern we see in data (all countries show the same pattern).
 
 ## TL;DR: Conclusions
 
 Summary of key findings to be implemented and taken into account in the further modeling:
 
--   Main effects of store and country should be included
+-   Handling 2020: 2020 is way too different from the other years to be able to use it as test data. Instead, we will build a model using 2017 and 2018 and test it on 2019. We will then build on that model by adjusting it based on 2020, assuming the difference is COVID driven (and thus also present in 2021 - if 2020 is just an anomaly, we can test it by applying the first model to the competition test data and see if the public leader board is way of). We will build the model this way, but we might try to only train it on 2020.\
+    Lockdown periods do not really correlate with the patterns in data. It does seem that the "old" patterns resume after the initial period of (march till june), so we might assume that 2021 just follows the old patterns but a generally larger volume (2020 levels).
 
--   There is strong seasonality for product, so we might include interaction between day or week of year and product and use a non-linear model.
+-   One option is to create a multivariate time series model (ARIMA, Prophet, etc.). Another options is to use a regular ML model using day of year as a predictor (we only yearly patters into account and not any autocorrelation or lagged values). Maybe we can combine both?
 
--   A weekend indicator is a useful variable.
+-   A useful approach might be to forecast the ratios of each TS and the total volume sold, since the ratios exhibit consistent patterns.
 
--   A variable indicating Christmas and first week of January is useful.
+-   Yearly seasonality is product driven. Each product evidently has its own type of season.
+
+-   Are there monthly seasons? We might expect sales to be larger in the beginning of the month, just after payday.
+
+-   There are weekly seasons, especially between weekend/work. Weekday or a weekend indicator is a useful variable.
+
+-   There is a strong effect of holidays around Christmas / beginning of jan.
+
+-   There does not seem to be trends over time which we would need to extrapolate trends to future years.
+
+-   COVID: Effects of lockdowns in each country in 2020 and 2021 needs to be accounted for. Note that in order for 2020 to be a reliable source of test data, we nee do create a version where the effect of lockdown is removed.

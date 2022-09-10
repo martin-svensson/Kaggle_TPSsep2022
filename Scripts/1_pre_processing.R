@@ -70,18 +70,17 @@ data[["test"]][
 
 split_row_id <- list()
 
-split_row_id[["test"]] <- 
+split_row_id[["2020"]] <- 
   data[["train"]][year(date) == 2020, row_id]
 
+split_row_id[["2019"]] <- 
+  data[["train"]][year(date) == 2019, row_id]
 
-split_row_id[["train_2017"]] <- 
-  data[["train"]][year(date) == 2017, row_id]
-
-split_row_id[["train_2018"]] <- 
+split_row_id[["2018"]] <- 
   data[["train"]][year(date) == 2018, row_id]
 
-split_row_id[["train_2019"]] <- 
-  data[["train"]][year(date) == 2019, row_id]
+split_row_id[["2017"]] <- 
+  data[["train"]][year(date) == 2017, row_id]
 
 # CV splits are created by year to allow  the model to learn seasonal effects. 
 # Use 2017 to predict 2018 and 2017+2018 to predict 2019 in the CV. 

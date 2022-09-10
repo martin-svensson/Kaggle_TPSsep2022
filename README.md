@@ -26,3 +26,7 @@ Branches are created in the following cases
 # Package Management
 
 Not necessary for this project, since it's a one-off and I'm the only contributor. 
+
+# Credits
+
+Lockdown data from: https://www.kaggle.com/datasets/xclimx/stay-at-home-covid-20202021
