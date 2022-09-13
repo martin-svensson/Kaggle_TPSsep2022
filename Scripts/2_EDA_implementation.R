@@ -28,7 +28,7 @@ load("./Output/1_data.RData")
 # PROGRAM
 # ------------------------------------------------------------------------------------------------------ #
 
-train_data <- data[!(row_id %in% split_row_id[["test"]])]
+train_data <- data[!(row_id %in% split_row_id[["2020"]])]
 
 
 # -- Time Variables ----------------------------------------------------------
@@ -51,11 +51,12 @@ fun_add_vars <- function(data) {
     weekend := ifelse(weekday %in% c("Saturday", "Sunday"), 1, 0) 
   ]
   
-  # -- Christmas
+  # -- Christmas and new year
   
   data_tmp[
     ,
-    holiday := ifelse((month == 12 & day_of_month > 26) | (month == 1 & day_of_month < 8), 1, 0)
+    `:=`(christmas = ifelse(month == 12 & day_of_month > 26, 1, 0), 
+         new_year = ifelse(month == 1 & day_of_month < 8, 1, 0))
   ]
   
   return(data_tmp)

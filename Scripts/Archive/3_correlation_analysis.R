@@ -1,11 +1,12 @@
 # ====================================================================================================== #
 # Description
 #
-#   Correlation analysis
+#   Correlation analysis. 
 #
 # Change log:
 #   Ver   Date        Comment
 #   1.0   05/09/22    Initial version
+#   1.1   11/09/22    It does not really make sense to do a correlation analysis (it is the time series ...)
 #
 # ====================================================================================================== #
 # ------------------------------------------------------------------------------------------------------ #
@@ -43,7 +44,7 @@ rm(
 # PROGRAM
 # ------------------------------------------------------------------------------------------------------ #
 
-train_data <- data[!(row_id %in% split_row_id[["test"]])]
+train_data <- data[!(row_id %in% split_row_id[["2020"]])]
 
 train_data %<>%
   pipeline$fun_add_vars()

@@ -43,7 +43,7 @@ rm(
 # PROGRAM
 # ------------------------------------------------------------------------------------------------------ #
 
-train_data <- data[!(row_id %in% split_row_id[["test"]])]
+train_data <- data[!(row_id %in% split_row_id[["2020"]])]
 
 train_data %<>%
   pipeline$fun_add_vars()
