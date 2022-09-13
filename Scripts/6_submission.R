@@ -218,11 +218,301 @@ xgb.ggplot.importance(model_fit[["feature_importance"]])
 
 # ---- Only 2017 to 2019 -------------------------------------------------------
 
+# learn patterns form 2017 to 2019 and scale according to bump in volume in 2020
+
+feature_names <- names(train_data)[c(9, 12:29)]
+
+model_fit <- 
+  xgboost_fit(
+    data_x = train_data[year(date) != 2020, feature_names, with = F],
+    data_y = train_data[year(date) != 2020, "num_sold"], 
+    data_val_x = competition_test_data[ , feature_names, with = F], 
+    nround = hp_grid_xgb[1, "nround"], 
+    max_depth = hp_grid_xgb[1, "max_depth"], 
+    gamma = hp_grid_xgb[1, "gamma"], 
+    lambda = hp_grid_xgb[1, "lambda"], 
+    eta = hp_grid_xgb[1, "eta"],
+    obj = hp_grid_xgb[1, "obj"]
+  )
+
+scaling_factor_tmp <- 
+  train_data %>%
+  group_by(
+    year(date)
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  )
+
+scaling_factor <- 
+  scaling_factor_tmp[4, ]$num_sold / mean(scaling_factor_tmp[1:3, ]$num_sold)
+
+predictions_scaled <- 
+  ceiling(model_fit$predictions * scaling_factor)
+  
+forecast_plot <- 
+  competition_test_data[ , num_sold := predictions_scaled] %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  )
+
+data %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  ) %>%
+  rows_append(
+    forecast_plot
+  ) %>%
+  ggplot(aes(x = date, y = num_sold, color = product)) +
+  geom_line()
+
+submission_3 <- 
+  data.table(
+    "row_id" = competition_test_data$row_id, 
+    "num_sold" = model_fit$predictions
+  )
+# public leaderboard; 30, so the pattern in 2021 follows that of 2020 much more closely that that of 2017 to 2019
+
+fwrite(
+  submission_3,
+  file = "./Output/Submissions/submission_3.csv"
+)
 
 
 # -- PROPHET -----------------------------------------------------------------
 
+prophet_df <- 
+  train_data %>%
+  pivot_wider(
+    id_cols = "date",
+    values_from = num_sold,
+    names_from = c("country", "store", "product")
+  ) %>% as.data.table()
+
+regressors <- names(train_data)[c(10, 12, 13)]
+
+prophet_regressors <- 
+  train_data[ 
+    , 
+    .SD[1], 
+    by = date
+  ][
+    ,
+    c("date", regressors),
+    with = F
+  ]
+
+# -- forecast df complete with regressors. This is the same no matter which ts we are looking at
+
+prophet_test_reg <- 
+  competition_test_data[ 
+    , 
+    .SD[1], 
+    by = date
+  ][
+    ,
+    c("date", regressors),
+    with = F
+  ]
+
+prophet_forecast_df <-
+  prophet_regressors %>%
+  rows_append(
+    prophet_test_reg
+  ) %>%
+  rename(
+    ds = date
+  )
+
+# -- model fit function
+
+prophet_fit_regressors <- function(data_ts, training_years) {
+  
+  model <- prophet()
+  model <- add_regressor(model, "weekday")
+  model <- add_regressor(model, "christmas")
+  model <- add_regressor(model, "new_year")
+  
+  model_df <- 
+    data_ts[year(date) %in% training_years] %>%
+    rename(
+      ds = date, 
+      y = 2
+    ) %>% 
+    left_join(
+      y = prophet_regressors,
+      by = c("ds" = "date")
+    )
+  
+  model <- 
+    fit.prophet(
+      model, 
+      model_df
+    )
+  
+  # -- forecast
+  
+  forecast <- 
+    predict(
+      model,
+      prophet_forecast_df[year(ds) %in% c(training_years, 2021)]
+    ) %>%
+    as.data.table()
+  
+  # -- Output
+  
+  out <- 
+    list(
+      model,
+      forecast
+    )
+  
+  names(out) <- c("model", "forecast")
+  
+  return(out)
+  
+}
+
+# -- Fit the model to each ts
+
+all_forecasts <- 
+  map(
+    names(prophet_df)[-1],
+    ~ prophet_fit_regressors(
+        data_ts = prophet_df[ , c("date", .x), with = F],
+        training_years = c(2017:2020) # training only on 2020 does need yields reasonable results
+      )
+  ) %>%
+  setNames(names(prophet_df)[-1])
+
+all_yhat <- 
+  map(
+    names(all_forecasts), 
+    ~ all_forecasts[[.x]][[2]][ , c("yhat", "ds")] %>%
+      mutate("ts" = .x)
+  ) %>% rbindlist()
+
+all_yhat[
+  , 
+  `:=`(ds = as.IDate(ds), yhat = ceiling(yhat))
+]
+
+prophet_test_df <- 
+  competition_test_data %>%
+  mutate(
+    ts = paste0(country, "_", store, "_", product)
+  ) %>%
+  left_join(
+    y = all_yhat,
+    by = c("ts" = "ts", "date" = "ds")
+  )
+
+# -- Plotting
+
+prophet::dyplot.prophet(
+  all_forecasts[[8]][["model"]],
+  all_forecasts[[8]][["forecast"]]
+)
+
+forecast_plot <-
+  prophet_test_df %>%
+  group_by(
+    date,
+    product
+  ) %>%
+  summarise(
+    num_sold = sum(yhat)
+  )
+
+data %>%
+  group_by(
+    date,
+    product
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  ) %>%
+  rows_append(
+    forecast_plot
+  ) %>%
+  ggplot(aes(x = date, y = num_sold, color = product)) +
+  geom_line()
+
+# -- Submission
+
+submission_4 <- 
+  data.table(
+    "row_id" = prophet_test_df$row_id, 
+    "num_sold" = prophet_test_df$yhat
+  )
+# public leaderboard; 11.3, so better than no regressors on 2019
+
+fwrite(
+  submission_4,
+  file = "./Output/Submissions/submission_4.csv"
+)
 
 
 
 
+
+
+
+# -- ENSEMBLE ----------------------------------------------------------------
+
+# Run xgboost and prophet sections first
+
+# -- Plotting
+
+forecast_plot_xgb <- 
+  competition_test_data[ , num_sold := model_fit$predictions] %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarise(
+    num_sold_xgb = sum(num_sold)
+  )
+
+forecast_plot_prophet <-
+  prophet_test_df %>%
+  group_by(
+    date,
+    product
+  ) %>%
+  summarise(
+    num_sold_prophet = sum(yhat)
+  )
+
+forecast_plot <- 
+  forecast_plot_xgb 
+
+forecast_plot$num_sold_prophet <- forecast_plot_prophet$num_sold_prophet
+
+forecast_plot %>%
+  ggplot() +
+  geom_line(aes(x = date, y = num_sold_xgb), color = "blue") + 
+  geom_line(aes(x = date, y = num_sold_prophet), color = "red") + 
+  facet_wrap(~ product)
+
+# -- simple averaging
+
+submission_5 <- 
+  data.table(
+    "row_id" = competition_test_data$row_id,
+    "num_sold" = (competition_test_data$num_sold +  prophet_test_df$yhat) / 2
+  )
+# public leaderboard; 7.9, so prophet makes it worse
+
+fwrite(
+  submission_5,
+  file = "./Output/Submissions/submission_5.csv"
+)
