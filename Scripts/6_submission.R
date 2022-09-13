@@ -123,10 +123,58 @@ model_fit <-
     obj = hp_grid_xgb[1, "obj"]
   )
 
+
+forecast_plot <- 
+  competition_test_data[ , num_sold := model_fit$predictions] %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  )
+
+data %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  ) %>%
+  rows_append(
+    forecast_plot
+  ) %>%
+  ggplot(aes(x = date, y = num_sold, color = product)) +
+  geom_line()
+
 submission_1 <- 
   data.table(
     "row_id" = competition_test_data$row_id, 
     "num_sold" = model_fit$predictions
+  )
+# public leaderboard; 6.89. Significantly worse than testing on 2019, so it is safe to say that 2021 is different. 
+
+fwrite(
+  submission_1,
+  file = "./Output/Submissions/submission_1.csv"
+)
+
+# ---- Only 2020 ---------------------------------------------------------------
+
+feature_names <- names(train_data)[c(9, 12:29)]
+
+model_fit <- 
+  xgboost_fit(
+    data_x = train_data[year(date) == 2020, feature_names, with = F],
+    data_y = train_data[year(date) == 2020, "num_sold"], 
+    data_val_x = competition_test_data[ , feature_names, with = F], 
+    nround = hp_grid_xgb[1, "nround"], 
+    max_depth = hp_grid_xgb[1, "max_depth"], 
+    gamma = hp_grid_xgb[1, "gamma"], 
+    lambda = hp_grid_xgb[1, "lambda"], 
+    eta = hp_grid_xgb[1, "eta"],
+    obj = hp_grid_xgb[1, "obj"]
   )
 
 forecast_plot <- 
@@ -153,12 +201,19 @@ data %>%
   ggplot(aes(x = date, y = num_sold, color = product)) +
   geom_line()
 
-# public leaderboard; 6.89. Significantly worse than testing on 2019, so it is safe to say that 2021 is different. 
+submission_2 <- 
+  data.table(
+    "row_id" = competition_test_data$row_id, 
+    "num_sold" = model_fit$predictions
+  )
+# public leaderboard; 6.80. Slightly better than submission 1, but it might as well be a fluke
 
-# ---- Only 2020 ---------------------------------------------------------------
+fwrite(
+  submission_2,
+  file = "./Output/Submissions/submission_2.csv"
+)
 
-
-
+xgb.ggplot.importance(model_fit[["feature_importance"]])
 
 
 # ---- Only 2017 to 2019 -------------------------------------------------------
@@ -170,16 +225,4 @@ data %>%
 
 
 
-# ==== EXPORT ------------------------------------------------------------------------------------------ 
 
-fwrite(
-  submission_1,
-  file = "./Output/Submissions/submission_1.csv"
-)
-
-submission_train_data <- train_data_tmp[ , feature_names, with = F]
-
-save(
-  submission_train_data,
-  file = "./Output/Submissions/submission_1_train_data.RData"
-)

@@ -15,6 +15,14 @@ The file name should describe as closely as possible what the script is about
 
 Outputs from scripts are stored in this folder. Outputs follow the script naming convention. 
 
+# Modeling Notes
+
+## Diagnostics
+
+Assessing predictive capability of a model on a validation set is an important diagnostic (for inferential models as well), but it does not tell us anything about how we might improve the model. 
+
+It is therefore equally important to carry out model diagnostics, such as analysis of residuals, assessment of assumptions (in particular probabilistic), etc., since these may give us a hint as to how we may improve the mode. 
+
 # Version Control: Branching Strategy
 
 The fundamental branching philosophy is to use branches whenever it is important to be able to easily revert to the current state. 
