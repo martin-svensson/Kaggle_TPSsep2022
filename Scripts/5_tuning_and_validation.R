@@ -43,6 +43,7 @@ library(caret)
 
 load("./Output/1_split_row_id.RData")
 load("./Output/1_data.RData")
+load("./Output/holidays_df.RData")
 
 # -- Source pipeline
 
@@ -78,14 +79,20 @@ train_data <- data[!(row_id %in% c(split_row_id[["2019"]], split_row_id[["2020"]
 val_data <- data[row_id %in% split_row_id[["2019"]]]
 
 train_data %<>%
-  pipeline$fun_add_vars() %>%
+  pipeline$fun_add_vars(
+    product_x_doy = TRUE, 
+    holidays = holidays_df
+  ) %>%
   pipeline$fun_encoding(
     label = "num_sold",
     cat_vars = c("country", "store", "product", "weekday")
   )
 
 val_data %<>%
-  pipeline$fun_add_vars() %>%
+  pipeline$fun_add_vars(
+    product_x_doy = TRUE, 
+    holidays = holidays_df
+  ) %>%
   pipeline$fun_encoding(
     label = "num_sold",
     cat_vars = c("country", "store", "product", "weekday")
@@ -179,7 +186,7 @@ colnames(hp_grid_xgb) <-
 
 hp_grid_xgb$val_error <- rep(NA, nrow(hp_grid_xgb))
 
-feature_names <- names(train_data)[c(9, 12:14, 15:29)]
+feature_names <- names(train_data)[c(10, 13:14, 15, 16:35)] #[c(7, 10, 13:16, 17:35)]
 
 for (i in (1:nrow(hp_grid_xgb))) {
   

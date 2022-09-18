@@ -136,30 +136,30 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div class="cell">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(train_data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>     row_id           date               country            store      
- Min.   :    0   Min.   :2017-01-01   Belgium:8760   KaggleMart:26280  
- 1st Qu.:13140   1st Qu.:2017-10-01   France :8760   KaggleRama:26280  
- Median :26280   Median :2018-07-02   Germany:8760                     
- Mean   :26280   Mean   :2018-07-02   Italy  :8760                     
- 3rd Qu.:39419   3rd Qu.:2019-04-02   Poland :8760                     
- Max.   :52559   Max.   :2019-12-31   Spain  :8760                     
-                                                                       
+<pre><code>     row_id           date               country             store      
+ Min.   :    0   Min.   :2017-01-01   Belgium:11688   KaggleMart:35064  
+ 1st Qu.:17532   1st Qu.:2018-01-01   France :11688   KaggleRama:35064  
+ Median :35064   Median :2019-01-01   Germany:11688                     
+ Mean   :35064   Mean   :2019-01-01   Italy  :11688                     
+ 3rd Qu.:52595   3rd Qu.:2020-01-01   Poland :11688                     
+ Max.   :70127   Max.   :2020-12-31   Spain  :11688                     
+                                                                        
                              product         num_sold       year      
- Kaggle Advanced Techniques      :13140   Min.   : 19.0   2017:17520  
- Kaggle for Kids: One Smart Goose:13140   1st Qu.: 89.0   2018:17520  
- Kaggle Getting Started          :13140   Median :142.0   2019:17520  
- Kaggle Recipe Book              :13140   Mean   :185.9               
-                                          3rd Qu.:269.0               
+ Kaggle Advanced Techniques      :17532   Min.   : 19.0   2017:17520  
+ Kaggle for Kids: One Smart Goose:17532   1st Qu.: 95.0   2018:17520  
+ Kaggle Getting Started          :17532   Median :148.0   2019:17520  
+ Kaggle Recipe Book              :17532   Mean   :194.3   2020:17568  
+                                          3rd Qu.:283.0               
                                           Max.   :986.0               
                                                                       
-     month        day_of_year   day_of_month        weekday    
- 1      : 4464   Min.   :  1   Min.   : 1.00   Friday   :7488  
- 3      : 4464   1st Qu.: 92   1st Qu.: 8.00   Monday   :7536  
- 5      : 4464   Median :183   Median :16.00   Saturday :7488  
- 7      : 4464   Mean   :183   Mean   :15.72   Sunday   :7536  
- 8      : 4464   3rd Qu.:274   3rd Qu.:23.00   Thursday :7488  
- 10     : 4464   Max.   :365   Max.   :31.00   Tuesday  :7536  
- (Other):25776                                 Wednesday:7488  </code></pre>
+     month        day_of_year     day_of_month        weekday     
+ 1      : 5952   Min.   :  1.0   Min.   : 1.00   Friday   : 9984  
+ 3      : 5952   1st Qu.: 92.0   1st Qu.: 8.00   Monday   :10032  
+ 5      : 5952   Median :183.0   Median :16.00   Saturday : 9984  
+ 7      : 5952   Mean   :183.1   Mean   :15.73   Sunday   :10032  
+ 8      : 5952   3rd Qu.:274.0   3rd Qu.:23.00   Thursday :10032  
+ 10     : 5952   Max.   :366.0   Max.   :31.00   Tuesday  :10032  
+ (Other):34416                                   Wednesday:10032  </code></pre>
 </div>
 </div>
 <p>No missing values. Only categorical predictors and no numeric. Label takes reasonable values, although heavy tailed. Number of observations of each category is uniform, suggesting one record pr. day pr. sub group without any missing days or duplicates - let’s quickly confirm this.</p>
@@ -365,12 +365,12 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <p>Note that inverse trends in the sub groups may cancel each other out, meaning that we would not be able to spot any patterns when looking at aggregate data, even though there are patterns when we look at individual ts.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>train_data <span class="sc">%&gt;%</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(day_of_month, month, product) <span class="sc">%&gt;%</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(day_of_month, month, country) <span class="sc">%&gt;%</span></span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
 <span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">num_sold =</span> <span class="fu">sum</span>(num_sold)</span>
 <span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
 <span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span> </span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">x =</span> day_of_month, <span class="at">y =</span> num_sold, <span class="at">color =</span> product)) <span class="sc">+</span> </span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">x =</span> day_of_month, <span class="at">y =</span> num_sold, <span class="at">color =</span> country)) <span class="sc">+</span> </span>
 <span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> month) <span class="sc">+</span> </span>
 <span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"bottom"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stderr">
@@ -381,7 +381,7 @@ using the `.groups` argument.</code></pre>
 <p><img src="EDA_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>There does not seem to be monthly seasonality, eg. sales do not seem to increase just after payday.</p>
+<p>There does not seem to be monthly seasonality, eg. sales do not seem to increase just after payday. However, it does seem that there is an effect of national holidays.</p>
 </section>
 <section id="by-week" class="level3">
 <h3 class="anchored" data-anchor-id="by-week">By week</h3>
@@ -552,14 +552,14 @@ using the `.groups` argument.</code></pre>
 <h2 class="anchored" data-anchor-id="tldr-conclusions">TL;DR: Conclusions</h2>
 <p>Summary of key findings to be implemented and taken into account in the further modeling:</p>
 <ul>
-<li><p>Handling 2020: 2020 is way too different from the other years to be able to use it as test data. Instead, we will build a model using 2017 and 2018 and test it on 2019. We will then build on that model by adjusting it based on 2020, assuming the difference is COVID driven (and thus also present in 2021 - if 2020 is just an anomaly, we can test it by applying the first model to the competition test data and see if the public leader board is way of). We will build the model this way, but we might try to only train it on 2020.<br>
+<li><p>Handling 2020: 2020 is way too different from the other years to be able to use it as test data. Instead, we will build a model using 2017 and 2018 and test it on 2019. We will then build on that model by adjusting it based on 2020, assuming the difference is COVID driven (and thus also present in 2021 - if 2020 is just an anomaly, we can test it by applying the first model to the competition test data and see if the public leader board is way off). We will build the model this way, but we might try to only train it on 2020. In summary, we can train on 2017 - 2020 (with an indicator for 2020 and 2021), on 2017 - 2019 or only 2020.<br>
 Lockdown periods do not really correlate with the patterns in data. It does seem that the “old” patterns resume after the initial period of (march till june), so we might assume that 2021 just follows the old patterns but a generally larger volume (2020 levels).</p></li>
 <li><p>One option is to create a multivariate time series model (ARIMA, Prophet, etc.). Another options is to use a regular ML model using day of year as a predictor (we only yearly patters into account and not any autocorrelation or lagged values). Maybe we can combine both?</p></li>
 <li><p>A useful approach might be to forecast the ratios of each TS and the total volume sold, since the ratios exhibit consistent patterns.</p></li>
 <li><p>Yearly seasonality is product driven. Each product evidently has its own type of season.</p></li>
 <li><p>Are there monthly seasons? We might expect sales to be larger in the beginning of the month, just after payday.</p></li>
 <li><p>There are weekly seasons, especially between weekend/work. Weekday or a weekend indicator is a useful variable.</p></li>
-<li><p>There is a strong effect of holidays around Christmas / beginning of jan.</p></li>
+<li><p>There is a strong effect of holidays around Christmas / beginning of jan, as well as a smaller effect of other holidays (easter, summer). Holidays by country and year might be useful feature.</p></li>
 <li><p>There does not seem to be trends over time which we would need to extrapolate trends to future years.</p></li>
 <li><p>COVID: Effects of lockdowns in each country in 2020 and 2021 needs to be accounted for. Note that in order for 2020 to be a reliable source of test data, we nee do create a version where the effect of lockdown is removed.</p></li>
 </ul>

@@ -48,13 +48,11 @@ train_data <- data[!(row_id %in% split_row_id[["2020"]])]
 train_data %<>%
   pipeline$fun_add_vars()
 
-fun_encoding <- function(data, label = NULL, cat_vars = NULL) {
+fun_encoding <- function(data, label, cat_vars) {
   
   # normalization of cont vars and one-hot encoding for cat var
   # Note: There are no cont_vars transformations in this specific case, since 
   # there is no reason to transform day_of_year
-  
-  stopifnot(is.character(cat_vars) && is.character(label))
   
   data_tmp <- copy(data)
   
@@ -76,7 +74,7 @@ fun_encoding <- function(data, label = NULL, cat_vars = NULL) {
   first_level <- 
     map_chr(
       cat_vars,
-      ~ levels(data[[.x]])[1]
+      ~ levels(data_tmp[[.x]])[1]
     )
   
   levels_remove <- paste0(cat_vars, ".", first_level)

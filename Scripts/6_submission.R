@@ -40,6 +40,7 @@ library(caret)
 
 load("./Output/1_split_row_id.RData")
 load("./Output/1_data.RData")
+load("./Output/holidays_df.RData")
 load("./Output/5_hp_grid_xgb.RData")
 load("./Output/1_competition_test_data.RData")
 
@@ -75,14 +76,22 @@ rm(
 
 train_data <- 
   data %>%
-  pipeline$fun_add_vars() %>%
+  pipeline$fun_add_vars(
+    product_x_doy = TRUE, 
+    country_x_year = TRUE,
+    holidays = holidays_df
+  ) %>%
   pipeline$fun_encoding(
     label = "num_sold",
     cat_vars = c("country", "store", "product", "weekday")
   )
 
 competition_test_data %<>%
-  pipeline$fun_add_vars() %>%
+  pipeline$fun_add_vars(
+    product_x_doy = TRUE, 
+    country_x_year = TRUE,
+    holidays = holidays_df
+  ) %>%
   pipeline$fun_encoding(
     label = "day_of_year", # used to get the model matrix, should be done in a better way
     cat_vars = c("country", "store", "product", "weekday")
@@ -285,6 +294,63 @@ fwrite(
   submission_3,
   file = "./Output/Submissions/submission_3.csv"
 )
+
+
+
+# ---- Submission 6 ------------------------------------------------------------
+
+feature_names <- names(train_data)[c(10, 13:43)]
+
+model_fit <- 
+  xgboost_fit(
+    data_x = train_data[ , feature_names, with = F],
+    data_y = train_data[ , "num_sold"], 
+    data_val_x = competition_test_data[ , feature_names, with = F], 
+    nround = hp_grid_xgb[1, "nround"], 
+    max_depth = hp_grid_xgb[1, "max_depth"], 
+    gamma = hp_grid_xgb[1, "gamma"], 
+    lambda = hp_grid_xgb[1, "lambda"], 
+    eta = hp_grid_xgb[1, "eta"],
+    obj = hp_grid_xgb[1, "obj"]
+  )
+
+forecast_plot <- 
+  competition_test_data[ , num_sold := model_fit$predictions] %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  )
+
+data %>%
+  group_by(
+    date, 
+    product
+  ) %>%
+  summarise(
+    num_sold = sum(num_sold)
+  ) %>%
+  rows_append(
+    forecast_plot
+  ) %>%
+  ggplot(aes(x = date, y = num_sold, color = product)) +
+  geom_line()
+
+submission_6 <- 
+  data.table(
+    "row_id" = competition_test_data$row_id, 
+    "num_sold" = model_fit$predictions
+  )
+# public leaderboard; 6.80. Slightly better than submission 1, but it might as well be a fluke
+
+fwrite(
+  submission_6,
+  file = "./Output/Submissions/submission_6.csv"
+)
+
+xgb.ggplot.importance(model_fit[["feature_importance"]])
 
 
 # -- PROPHET -----------------------------------------------------------------

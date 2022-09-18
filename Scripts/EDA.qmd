@@ -227,17 +227,17 @@ Note that inverse trends in the sub groups may cancel each other out, meaning th
 
 ```{r}
 train_data %>%
-  group_by(day_of_month, month, product) %>%
+  group_by(day_of_month, month, country) %>%
   summarise(
     num_sold = sum(num_sold)
   ) %>%
   ggplot() + 
-  geom_point(aes(x = day_of_month, y = num_sold, color = product)) + 
+  geom_point(aes(x = day_of_month, y = num_sold, color = country)) + 
   facet_wrap(~ month) + 
   theme(legend.position = "bottom")
 ```
 
-There does not seem to be monthly seasonality, eg. sales do not seem to increase just after payday.
+There does not seem to be monthly seasonality, eg. sales do not seem to increase just after payday. However, it does seem that there is an effect of national holidays.
 
 ### By week
 
@@ -392,7 +392,7 @@ Summary of key findings to be implemented and taken into account in the further 
 
 -   There are weekly seasons, especially between weekend/work. Weekday or a weekend indicator is a useful variable.
 
--   There is a strong effect of holidays around Christmas / beginning of jan.
+-   There is a strong effect of holidays around Christmas / beginning of jan, as well as a smaller effect of other holidays (easter, summer). Holidays by country and year might be useful feature.
 
 -   There does not seem to be trends over time which we would need to extrapolate trends to future years.
 
