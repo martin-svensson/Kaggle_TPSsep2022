@@ -9,7 +9,12 @@ Post competition notes:
 
 - Pipeline: The method used for building and applying pipeline functions (feature engineering transformations and encoding) is useful
 - Handling time series data and in particular using Prophet was fun
-- Making a commit for every submission is a useful way to always be able to revert to the exact code used to create a sumission
+- Making a commit for every submission is a useful way to always be able to revert to the exact code used to create a submission
+- Ways to improve my score (main differences between my and winning solutions)
+  - Predict aggregate sales and ratios as opposed to raw time series
+  - Feature engineering: important dates and holidays were important
+  - Diagnostics: Understand where and why the model does not perform as expected and use that insigt in the feature engineering
+- For the net TS prediction challenge, try out Tidyverts
 
 # Scripts: Structure
 
@@ -42,16 +47,6 @@ Branches are created in the following cases
 # Package Management
 
 Not necessary for this project, since it's a one-off and I'm the only contributor. 
-
-# Take aways from comptetiion
-
-- Creating pipeline functions which is sourced into pipeline environment works well
-- Committing code for each submission makes it easy to revert to the exact code that created any submission file
-- Ways to improve my score (main differences between my and winning solutions)
-  - Predict aggregate sales and ratios as opposed to raw time series
-  - Feature engineering: important dates and holidays were important
-  - Diagnostics: Understand where and why the model does not perform as expected and use that insigt in the feature engineering
-- For the net TS prediction challenge, try out Tidyverts
 
 # Credits
 
